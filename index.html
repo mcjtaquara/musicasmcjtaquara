@@ -1337,13 +1337,24 @@
       const song = SONGS.find(function(s) { return s.id === id; });
       if (!song) return;
       const moment = momentOf(id) || 'Sem momento definido';
+      const momentLabel = moment.toUpperCase();
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(10.5);
       doc.setTextColor(109, 27, 58);
-      doc.text(moment.toUpperCase(), marginLeft, y);
+      doc.text(momentLabel, marginLeft, y);
+      // Coluna do título começa depois do rótulo do momento, com um espaço
+      // mínimo garantido — evita sobreposição quando o nome do momento é
+      // comprido (ex: "SEM MOMENTO DEFINIDO").
+      const labelWidth = doc.getTextWidth(momentLabel);
+      const titleX = Math.max(marginLeft + 42, marginLeft + labelWidth + 6);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(42, 31, 34);
-      doc.text(song.title + (song.artist ? ' — ' + song.artist : '') + '  (pág. ' + song.page + ')', marginLeft + 42, y);
+      let titleText = song.title + (song.artist ? ' — ' + song.artist : '') + '  (pág. ' + song.page + ')';
+      const maxTitleWidth = (pageW - marginLeft) - titleX;
+      while (doc.getTextWidth(titleText) > maxTitleWidth && titleText.length > 10) {
+        titleText = titleText.slice(0, -4) + '...';
+      }
+      doc.text(titleText, titleX, y);
       y += 7;
       if (y > pageH - 20) { doc.addPage(); y = 22; }
     });
