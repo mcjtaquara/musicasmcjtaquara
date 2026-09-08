@@ -862,9 +862,12 @@
   document.getElementById('retry-btn').addEventListener('click', loadSongs);
 
   // Atualiza o estado da trava quando a pessoa volta pro app (outro
-  // dispositivo pode ter selecionado/limpado enquanto isso).
+  // dispositivo pode ter selecionado/limpado enquanto isso). Só faz sentido
+  // rebuscar se EU não sou a dona da trava agora — se eu já sou a dona,
+  // ninguém mais pode ter mudado nada mesmo, e rebuscar à toa só corre o
+  // risco de pegar uma leitura levemente atrasada do servidor.
   document.addEventListener('visibilitychange', function() {
-    if (document.visibilityState === 'visible' && SONGS.length) {
+    if (document.visibilityState === 'visible' && SONGS.length && !isOwner) {
       refreshServerState();
     }
   });
@@ -1011,8 +1014,15 @@
     }
   }
 
+  let syncDebounceTimer = null;
   function syncSelectionToServer() {
     if (!isOwner) return;
+    clearTimeout(syncDebounceTimer);
+    // Agrupa mudanças rápidas (marcar várias músicas seguidas, trocar de
+    // momento logo em seguida) numa única chamada, em vez de uma por toque.
+    syncDebounceTimer = setTimeout(function() { doSync(0); }, 350);
+  }
+  function doSync(attempt) {
     const params = new URLSearchParams();
     params.set('action', 'update');
     params.set('owner', myName);
@@ -1022,6 +1032,12 @@
       .then(function(res) { return res.json(); })
       .then(function(data) {
         if (data.error) {
+          if (attempt < 2) {
+            // pode ser só o servidor ainda "assentando" a trava — tenta de novo
+            // antes de desistir e tratar como perda real da posse.
+            setTimeout(function() { doSync(attempt + 1); }, 600);
+            return;
+          }
           alert('Não deu pra salvar: ' + data.error);
           applyServerState(data);
           updateMissaSelectButton();
