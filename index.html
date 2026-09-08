@@ -386,6 +386,20 @@
       gap: 8px;
       margin-top: 6px;
     }
+    .modal-hint {
+      font-size: 12.5px;
+      color: var(--muted);
+      margin: 0 0 14px;
+      line-height: 1.5;
+    }
+    .modal-hint-small { font-size: 11px; margin: 10px 0 4px; }
+    .result-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+    .result-btn { width: 100%; text-align: center; }
 
     /* ---------- Song screen ---------- */
     #screen-song {
@@ -650,6 +664,25 @@
         <div class="modal-actions">
           <button id="missa-pdf-cancel" class="sel-btn sel-btn-ghost">Cancelar</button>
           <button id="missa-pdf-confirm" class="sel-btn sel-btn-primary">Gerar PDF</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== MODAL: PDF GERADO (opções de envio) ===================== -->
+    <div id="missa-pdf-result-modal" class="modal-overlay">
+      <div class="modal-card">
+        <h3>PDF gerado! 🎉</h3>
+        <p class="modal-hint">Escolha o que fazer com o arquivo:</p>
+        <div class="result-actions">
+          <button id="pdf-share-btn" class="sel-btn sel-btn-primary result-btn">📤 Compartilhar (WhatsApp e outros)</button>
+          <button id="pdf-download-btn" class="sel-btn sel-btn-ghost result-btn">⬇️ Baixar PDF</button>
+          <button id="pdf-whatsapp-btn" class="sel-btn sel-btn-ghost result-btn">💬 Abrir WhatsApp</button>
+        </div>
+        <p class="modal-hint modal-hint-small" id="pdf-whatsapp-note" style="display:none;">
+          O WhatsApp não deixa anexar arquivo automaticamente por link — baixe o PDF primeiro e anexe ele manualmente na conversa que abrir.
+        </p>
+        <div class="modal-actions">
+          <button id="pdf-result-close" class="sel-btn sel-btn-ghost">Fechar</button>
         </div>
       </div>
     </div>
@@ -1344,16 +1377,59 @@
     });
 
     const filename = 'musicas-missa' + (date ? '-' + date : '') + '.pdf';
-    try {
-      const blob = doc.output('blob');
-      const file = new File([blob], filename, { type: 'application/pdf' });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        navigator.share({ files: [file], title: 'Músicas da Missa' }).catch(function() { doc.save(filename); });
-        return;
-      }
-    } catch (e) { /* segue pro download normal */ }
-    doc.save(filename);
+    lastPdfBlob = doc.output('blob');
+    lastPdfFilename = filename;
+    showPdfResultModal();
   }
+
+  // ---------- Opções após gerar o PDF: baixar, compartilhar ou WhatsApp ----------
+  let lastPdfBlob = null;
+  let lastPdfFilename = '';
+  const pdfResultModal = document.getElementById('missa-pdf-result-modal');
+  const pdfShareBtn = document.getElementById('pdf-share-btn');
+  const pdfWhatsappNote = document.getElementById('pdf-whatsapp-note');
+
+  function canShareFile(blob, filename) {
+    if (!navigator.canShare) return false;
+    try {
+      const file = new File([blob], filename, { type: 'application/pdf' });
+      return navigator.canShare({ files: [file] });
+    } catch (e) { return false; }
+  }
+
+  function showPdfResultModal() {
+    pdfShareBtn.style.display = canShareFile(lastPdfBlob, lastPdfFilename) ? '' : 'none';
+    pdfWhatsappNote.style.display = 'none';
+    pdfResultModal.classList.add('show');
+  }
+
+  document.getElementById('pdf-download-btn').addEventListener('click', function() {
+    if (!lastPdfBlob) return;
+    const url = URL.createObjectURL(lastPdfBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = lastPdfFilename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function() { URL.revokeObjectURL(url); }, 2000);
+  });
+
+  pdfShareBtn.addEventListener('click', function() {
+    if (!lastPdfBlob) return;
+    const file = new File([lastPdfBlob], lastPdfFilename, { type: 'application/pdf' });
+    navigator.share({ files: [file], title: 'Músicas da Missa' }).catch(function() {});
+  });
+
+  document.getElementById('pdf-whatsapp-btn').addEventListener('click', function() {
+    pdfWhatsappNote.style.display = 'block';
+    const text = encodeURIComponent('Segue as músicas da missa 🎶');
+    window.open('https://wa.me/?text=' + text, '_blank');
+  });
+
+  document.getElementById('pdf-result-close').addEventListener('click', function() {
+    pdfResultModal.classList.remove('show');
+  });
 
 
 
