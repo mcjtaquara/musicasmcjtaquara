@@ -210,11 +210,6 @@
       cursor: pointer;
     }
     .missa-select-btn:active { transform: scale(0.98); }
-    .missa-select-btn.locked {
-      background: var(--cream);
-      color: var(--wine-dark);
-      border: 1.5px dashed var(--wine);
-    }
 
     .song-item.selectable { padding-left: 12px; }
     .song-item .select-check {
@@ -356,34 +351,6 @@
       border: 1px solid var(--gold-dark);
       color: #fff;
       font-weight: 700;
-    }
-    .moment-tag {
-      flex-shrink: 0;
-      font-size: 11px;
-      font-weight: 700;
-      color: var(--wine-dark);
-      background: var(--cream);
-      border: 1px solid var(--gold);
-      border-radius: 8px;
-      padding: 6px 8px;
-      max-width: 108px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .moment-tag.unassigned {
-      background: var(--gold);
-      border-color: var(--gold-dark);
-      color: #fff;
-    }
-    .readonly-note {
-      background: var(--gold-light);
-      color: var(--wine-dark);
-      font-size: 12px;
-      font-weight: 600;
-      padding: 10px 12px;
-      border-radius: 10px;
-      margin-bottom: 10px;
     }
     .missa-row .remove-btn {
       flex-shrink: 0;
@@ -705,27 +672,10 @@
         </div>
       </div>
       <div id="missa-list-scroll" class="missa-list-scroll">
-        <div id="missa-readonly-note" class="readonly-note" style="display:none;"></div>
         <div id="missa-empty" class="empty-state" style="display:none;">
           Nenhuma música selecionada ainda.<br>Toque em "+ Adicionar música" pra começar.
         </div>
         <div id="missa-list"></div>
-      </div>
-    </div>
-
-    <!-- ===================== MODAL: SEU NOME (sem senha) ===================== -->
-    <div id="name-modal" class="modal-overlay">
-      <div class="modal-card">
-        <h3>Antes de começar…</h3>
-        <p class="modal-hint">Só pra identificar quem está montando a lista da missa
-          (não precisa senha) — assim o app avisa os outros enquanto você seleciona.</p>
-        <label class="modal-label">Seu nome
-          <input type="text" id="name-input" placeholder="Ex: Ana">
-        </label>
-        <div class="modal-actions">
-          <button id="name-cancel" class="sel-btn sel-btn-ghost">Cancelar</button>
-          <button id="name-confirm" class="sel-btn sel-btn-primary">Continuar</button>
-        </div>
       </div>
     </div>
 
@@ -841,16 +791,14 @@
 
   function loadSongs() {
     showLoading();
-    fetch(API_URL + '?action=state')
+    fetch(API_URL)
       .then(function(res) {
         if (!res.ok) throw new Error('HTTP ' + res.status);
         return res.json();
       })
       .then(function(data) {
         initSongs(data.songs || data);
-        applyServerState(data);
         showApp();
-        updateMissaSelectButton();
         renderList();
         router();
       })
@@ -860,28 +808,6 @@
       });
   }
   document.getElementById('retry-btn').addEventListener('click', loadSongs);
-
-  // Atualiza o estado da trava quando a pessoa volta pro app (outro
-  // dispositivo pode ter selecionado/limpado enquanto isso). Só faz sentido
-  // rebuscar se EU não sou a dona da trava agora — se eu já sou a dona,
-  // ninguém mais pode ter mudado nada mesmo, e rebuscar à toa só corre o
-  // risco de pegar uma leitura levemente atrasada do servidor.
-  document.addEventListener('visibilitychange', function() {
-    if (document.visibilityState === 'visible' && SONGS.length && !isOwner) {
-      refreshServerState();
-    }
-  });
-  function refreshServerState() {
-    fetch(API_URL + '?action=state')
-      .then(function(res) { return res.json(); })
-      .then(function(data) {
-        applyServerState(data);
-        updateMissaSelectButton();
-        if (selectionMode) renderList();
-        if (location.hash.indexOf('#/missa') === 0) renderMissaList();
-      })
-      .catch(function() {});
-  }
 
   // ---------- Elementos ----------
   const searchInput = document.getElementById('search-input');
@@ -898,7 +824,7 @@
     screenMissa.style.display = name === 'missa' ? 'flex' : 'none';
   }
 
-  // ---------- Seleção de músicas para a missa (com trava compartilhada) ----------
+  // ---------- Seleção de músicas para a missa ----------
   const LITURGICAL_MOMENTS = ['Entrada', 'Ato Penitencial', 'Glória', 'Aclamação',
     'Ofertório', 'Santo', 'Cordeiro', 'Comunhão', 'Pós-Comunhão', 'Saída', 'Extra'];
   const MAX_MISSA_SONGS = 11;
@@ -906,91 +832,25 @@
   let selectionMode = false;
   let selectedIds = [];
   let momentAssignments = {};
-  let myName = localStorage.getItem('mcj_my_name') || '';
-  let lockOwner = '';
-  let lockAt = '';
-  let isOwner = false;
 
-  function applyServerState(data) {
-    lockOwner = data.lockOwner || '';
-    lockAt = data.lockAt || '';
-    selectedIds = data.selection || [];
-    momentAssignments = data.assignments || {};
-    isOwner = !!(myName && lockOwner && myName === lockOwner);
+  function loadMissaState() {
+    try { selectedIds = JSON.parse(localStorage.getItem('mcj_missa_selected') || '[]'); }
+    catch (e) { selectedIds = []; }
+    try { momentAssignments = JSON.parse(localStorage.getItem('mcj_missa_assignments') || '{}'); }
+    catch (e) { momentAssignments = {}; }
   }
+  function saveMissaState() {
+    localStorage.setItem('mcj_missa_selected', JSON.stringify(selectedIds));
+    localStorage.setItem('mcj_missa_assignments', JSON.stringify(momentAssignments));
+  }
+  loadMissaState();
 
   const missaSelectBtn = document.getElementById('open-missa-selection-btn');
   const selectionBar = document.getElementById('selection-bar');
   const selectionCountEl = document.getElementById('selection-count');
-  const nameModal = document.getElementById('name-modal');
-  const missaClearBtn = document.getElementById('missa-clear-btn');
-  const missaAddBtn = document.getElementById('missa-add-btn');
-  const missaReadonlyNote = document.getElementById('missa-readonly-note');
 
   function updateSelectionCount() {
     selectionCountEl.textContent = selectedIds.length;
-  }
-
-  function updateMissaSelectButton() {
-    if (lockOwner && !isOwner) {
-      missaSelectBtn.innerHTML = '👀 ' + escapeHtml(lockOwner) + ' já selecionou as músicas — toque para ver';
-      missaSelectBtn.classList.add('locked');
-    } else {
-      missaSelectBtn.innerHTML = '🎼 Selecionar Músicas para a Missa';
-      missaSelectBtn.classList.remove('locked');
-    }
-    missaSelectBtn.style.display = selectionMode ? 'none' : '';
-  }
-
-  function updateMissaClearButton() {
-    if (isOwner || !lockOwner) {
-      missaClearBtn.textContent = '🗑️ Limpar seleção';
-      missaClearBtn.onclick = function() { clearMissaSelection(false); };
-    } else {
-      missaClearBtn.textContent = '🔓 Assumir e limpar';
-      missaClearBtn.onclick = function() { clearMissaSelection(true); };
-    }
-    missaAddBtn.style.display = isOwner ? '' : 'none';
-    if (missaReadonlyNote) {
-      missaReadonlyNote.style.display = (!isOwner && lockOwner) ? 'block' : 'none';
-      missaReadonlyNote.textContent = 'Você está vendo a seleção de ' + lockOwner + ' — somente leitura.';
-    }
-  }
-
-  // ---------- Modal: pedir o nome (só na primeira vez, sem senha) ----------
-  let pendingNameAction = null;
-  function ensureName(callback) {
-    if (myName) { callback(); return; }
-    pendingNameAction = callback;
-    document.getElementById('name-input').value = '';
-    nameModal.classList.add('show');
-  }
-  document.getElementById('name-cancel').addEventListener('click', function() {
-    pendingNameAction = null;
-    nameModal.classList.remove('show');
-  });
-  document.getElementById('name-confirm').addEventListener('click', function() {
-    const val = document.getElementById('name-input').value.trim();
-    if (!val) return;
-    myName = val;
-    localStorage.setItem('mcj_my_name', myName);
-    nameModal.classList.remove('show');
-    const cb = pendingNameAction; pendingNameAction = null;
-    if (cb) cb();
-  });
-
-  function claimAndEnter() {
-    fetch(API_URL + '?action=claim&name=' + encodeURIComponent(myName))
-      .then(function(res) { return res.json(); })
-      .then(function(data) {
-        applyServerState(data);
-        updateMissaSelectButton();
-        if (data.error) { alert(data.error); return; }
-        enterSelectionMode();
-      })
-      .catch(function() {
-        alert('Não consegui conectar. Verifique sua internet e tente de novo.');
-      });
   }
 
   function enterSelectionMode() {
@@ -1003,51 +863,9 @@
   function exitSelectionMode() {
     selectionMode = false;
     selectionBar.classList.remove('show');
-    updateMissaSelectButton();
+    missaSelectBtn.style.display = '';
     renderList();
-    if (isOwner && selectedIds.length === 0) {
-      // ninguém escolheu nada ainda — libera a trava sozinho, sem perguntar
-      fetch(API_URL + '?action=clear&owner=' + encodeURIComponent(myName))
-        .then(function(res) { return res.json(); })
-        .then(function(data) { applyServerState(data); updateMissaSelectButton(); })
-        .catch(function() {});
-    }
   }
-
-  let syncDebounceTimer = null;
-  function syncSelectionToServer() {
-    if (!isOwner) return;
-    clearTimeout(syncDebounceTimer);
-    // Agrupa mudanças rápidas (marcar várias músicas seguidas, trocar de
-    // momento logo em seguida) numa única chamada, em vez de uma por toque.
-    syncDebounceTimer = setTimeout(function() { doSync(0); }, 350);
-  }
-  function doSync(attempt) {
-    const params = new URLSearchParams();
-    params.set('action', 'update');
-    params.set('owner', myName);
-    params.set('selection', JSON.stringify(selectedIds));
-    params.set('assignments', JSON.stringify(momentAssignments));
-    fetch(API_URL + '?' + params.toString())
-      .then(function(res) { return res.json(); })
-      .then(function(data) {
-        if (data.error) {
-          if (attempt < 2) {
-            // pode ser só o servidor ainda "assentando" a trava — tenta de novo
-            // antes de desistir e tratar como perda real da posse.
-            setTimeout(function() { doSync(attempt + 1); }, 600);
-            return;
-          }
-          alert('Não deu pra salvar: ' + data.error);
-          applyServerState(data);
-          updateMissaSelectButton();
-          if (selectionMode) renderList();
-          renderMissaList();
-        }
-      })
-      .catch(function() {});
-  }
-
   function toggleSelect(id) {
     const idx = selectedIds.indexOf(id);
     if (idx !== -1) {
@@ -1057,6 +875,7 @@
       });
     } else {
       if (selectedIds.length >= MAX_MISSA_SONGS) {
+        const old = metaEl.textContent;
         metaEl.textContent = 'Máximo de ' + MAX_MISSA_SONGS + ' músicas atingido';
         metaEl.style.color = '#b5555a';
         setTimeout(function() { metaEl.style.color = ''; renderList(); }, 1400);
@@ -1064,15 +883,12 @@
       }
       selectedIds.push(id);
     }
+    saveMissaState();
     updateSelectionCount();
     renderList();
-    syncSelectionToServer();
   }
 
-  missaSelectBtn.addEventListener('click', function() {
-    if (lockOwner && !isOwner) { location.hash = '#/missa'; return; }
-    ensureName(claimAndEnter);
-  });
+  missaSelectBtn.addEventListener('click', enterSelectionMode);
   document.getElementById('selection-cancel-btn').addEventListener('click', exitSelectionMode);
   document.getElementById('selection-go-btn').addEventListener('click', function() {
     if (selectedIds.length === 0) {
@@ -1085,32 +901,19 @@
     location.hash = '#/missa';
   });
 
-  // ---------- Limpar (ou assumir e limpar) toda a seleção ----------
-  function clearMissaSelection(force) {
-    if (selectedIds.length === 0 && !lockOwner) return;
-    const msg = force
-      ? ('Assumir e limpar a seleção de "' + lockOwner + '"? Isso apaga o que já foi escolhido até agora.')
-      : 'Limpar toda a seleção de músicas da missa? Essa ação não pode ser desfeita.';
-    if (!confirm(msg)) return;
-    ensureName(function() {
-      const params = new URLSearchParams();
-      params.set('action', 'clear');
-      params.set('owner', myName);
-      if (force) params.set('force', '1');
-      fetch(API_URL + '?' + params.toString())
-        .then(function(res) { return res.json(); })
-        .then(function(data) {
-          if (data.error) { alert(data.error); }
-          applyServerState(data);
-          updateSelectionCount();
-          updateMissaSelectButton();
-          if (selectionMode) renderList();
-          renderMissaList();
-        })
-        .catch(function() { alert('Não consegui conectar. Tente de novo.'); });
-    });
+  // ---------- Limpar toda a seleção (usado nas duas telas) ----------
+  function clearMissaSelection() {
+    if (selectedIds.length === 0) return;
+    const ok = confirm('Limpar toda a seleção de músicas da missa? Essa ação não pode ser desfeita.');
+    if (!ok) return;
+    selectedIds = [];
+    momentAssignments = {};
+    saveMissaState();
+    updateSelectionCount();
+    if (selectionMode) renderList();
+    if (location.hash === '#/missa' || location.hash.indexOf('#/missa') === 0) renderMissaList();
   }
-  document.getElementById('selection-clear-btn').addEventListener('click', function() { clearMissaSelection(false); });
+  document.getElementById('selection-clear-btn').addEventListener('click', clearMissaSelection);
 
   function escapeHtml(s) {
     return (s || '').replace(/[&<>"']/g, function(c) {
@@ -1395,16 +1198,12 @@
   }
 
   function renderMissaList() {
-    updateMissaClearButton();
     missaSubtitleEl.textContent = selectedIds.length +
       (selectedIds.length === 1 ? ' música escolhida' : ' músicas escolhidas') +
       (selectedIds.length >= MAX_MISSA_SONGS ? ' (máximo)' : '');
 
     if (selectedIds.length === 0) {
       missaEmptyEl.style.display = 'block';
-      missaEmptyEl.textContent = isOwner || !lockOwner
-        ? 'Nenhuma música selecionada ainda. Toque em "+ Adicionar música" pra começar.'
-        : 'A seleção foi limpa.';
       missaListEl.innerHTML = '';
       return;
     }
@@ -1419,30 +1218,22 @@
       const song = SONGS.find(function(s) { return s.id === id; });
       if (!song) return;
       const current = momentOf(id);
-
-      let momentHtml;
-      if (isOwner) {
-        const selectCls = current ? 'moment-select' : 'moment-select unassigned';
-        let options = '<option value="">Momento…</option>';
-        LITURGICAL_MOMENTS.forEach(function(m) {
-          const takenBy = momentAssignments[m];
-          const isDisabled = (takenBy !== undefined && takenBy !== id);
-          const isSel = (m === current);
-          options += '<option value="' + m + '"' + (isDisabled ? ' disabled' : '') + (isSel ? ' selected' : '') + '>' + m + '</option>';
-        });
-        momentHtml = '<select class="' + selectCls + '">' + options + '</select>';
-      } else {
-        momentHtml = '<span class="moment-tag' + (current ? '' : ' unassigned') + '">' + escapeHtml(current || 'Sem momento') + '</span>';
-      }
-
+      const selectCls = current ? 'moment-select' : 'moment-select unassigned';
+      let options = '<option value="">Momento…</option>';
+      LITURGICAL_MOMENTS.forEach(function(m) {
+        const takenBy = momentAssignments[m];
+        const isDisabled = (takenBy !== undefined && takenBy !== id);
+        const isSel = (m === current);
+        options += '<option value="' + m + '"' + (isDisabled ? ' disabled' : '') + (isSel ? ' selected' : '') + '>' + m + '</option>';
+      });
       html += '<div class="missa-row" data-id="' + id + '">' +
-        momentHtml +
+        '<select class="' + selectCls + '">' + options + '</select>' +
         '<div class="missa-main">' +
           '<div class="title">' + escapeHtml(song.title) + '</div>' +
           (song.artist ? '<div class="artist">' + escapeHtml(song.artist) + '</div>' : '') +
         '</div>' +
         '<div class="page-badge">' + song.page + '</div>' +
-        (isOwner ? '<button class="remove-btn" aria-label="Remover">✕</button>' : '') +
+        '<button class="remove-btn" aria-label="Remover">✕</button>' +
       '</div>';
     });
     missaListEl.innerHTML = html;
@@ -1452,31 +1243,24 @@
       row.querySelector('.missa-main').addEventListener('click', function() {
         location.hash = '#/missa/musica/' + id;
       });
-      const sel = row.querySelector('.moment-select');
-      if (sel) {
-        sel.addEventListener('change', function(e) {
-          const val = e.target.value;
-          Object.keys(momentAssignments).forEach(function(m) {
-            if (momentAssignments[m] === id) delete momentAssignments[m];
-          });
-          if (val) momentAssignments[val] = id;
-          renderMissaList();
-          syncSelectionToServer();
+      row.querySelector('.moment-select').addEventListener('change', function(e) {
+        const val = e.target.value;
+        Object.keys(momentAssignments).forEach(function(m) {
+          if (momentAssignments[m] === id) delete momentAssignments[m];
         });
-      }
-      const removeBtn = row.querySelector('.remove-btn');
-      if (removeBtn) {
-        removeBtn.addEventListener('click', function(e) {
-          e.stopPropagation();
-          const idx = selectedIds.indexOf(id);
-          if (idx !== -1) selectedIds.splice(idx, 1);
-          Object.keys(momentAssignments).forEach(function(m) {
-            if (momentAssignments[m] === id) delete momentAssignments[m];
-          });
-          renderMissaList();
-          syncSelectionToServer();
+        if (val) momentAssignments[val] = id;
+        saveMissaState();
+        renderMissaList();
+      });
+      row.querySelector('.remove-btn').addEventListener('click', function() {
+        const idx = selectedIds.indexOf(id);
+        if (idx !== -1) selectedIds.splice(idx, 1);
+        Object.keys(momentAssignments).forEach(function(m) {
+          if (momentAssignments[m] === id) delete momentAssignments[m];
         });
-      }
+        saveMissaState();
+        renderMissaList();
+      });
     });
   }
 
@@ -1485,11 +1269,11 @@
     location.hash = '';
   });
   document.getElementById('missa-add-btn').addEventListener('click', function() {
-    if (!isOwner) return;
     showOnly('list');
     enterSelectionMode();
     location.hash = '';
   });
+  document.getElementById('missa-clear-btn').addEventListener('click', clearMissaSelection);
 
   // ---------- Geração do PDF ----------
   const missaPdfModal = document.getElementById('missa-pdf-modal');
