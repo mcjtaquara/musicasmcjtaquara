@@ -485,6 +485,17 @@
       font-size: 14px;
       font-family: var(--font-ui);
       color: var(--ink);
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      appearance: none;
+      background-color: #fff;
+    }
+    .modal-label select {
+      padding-right: 32px;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23232427' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      background-size: 16px;
     }
     .modal-actions {
       display: flex;
@@ -624,20 +635,23 @@
     .speed-wrap {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 4px;
       background: rgba(255,255,255,0.7);
       border: 1px solid rgba(255,255,255,0.9);
       box-shadow: 0 1px 3px rgba(35,36,39,0.12);
       border-radius: 10px;
-      padding: 4px 10px;
+      padding: 0 4px 0 10px;
       flex: 1;
       min-width: 140px;
     }
     .speed-wrap span { font-size: 11px; color: var(--wine-dark); opacity: 0.75; white-space: nowrap; }
-    .speed-wrap input[type=range] {
-      flex: 1;
-      accent-color: var(--gold);
+    .speed-wrap .stepper-value { min-width: 22px; text-align: center; opacity: 1; font-weight: 600; }
+    .speed-wrap .stepper-btn {
+      background: none; border: none; color: var(--wine-dark);
+      width: 30px; height: 30px; font-size: 16px; font-weight: 700; cursor: pointer;
+      flex-shrink: 0;
     }
+    .speed-wrap .stepper-btn:active { transform: scale(0.88); }
     .wake-status {
       font-size: 10.5px;
       color: var(--wine-dark);
@@ -742,7 +756,9 @@
           <button class="tool-btn" id="play-btn">▶ Rolagem</button>
           <div class="speed-wrap">
             <span>Veloc.</span>
-            <input type="range" id="speed-range" min="1" max="10" step="0.5" value="4">
+            <button id="speed-minus" class="stepper-btn" type="button">−</button>
+            <span id="speed-label" class="stepper-value">4</span>
+            <button id="speed-plus" class="stepper-btn" type="button">+</button>
           </div>
           <div class="font-controls">
             <button id="font-minus">A−</button>
@@ -1740,12 +1756,16 @@
 
   // ---------- Rolagem automática ----------
   const playBtn = document.getElementById('play-btn');
-  const speedRange = document.getElementById('speed-range');
+  const speedLabel = document.getElementById('speed-label');
   let scrolling = false;
   let intervalId = null;
   const TICK_MS = 40; // ~25 passos por segundo
 
-  speedRange.value = localStorage.getItem('mcj_speed') || '4';
+  let speedValue = parseFloat(localStorage.getItem('mcj_speed')) || 4;
+  function updateSpeedLabel() {
+    speedLabel.textContent = (speedValue % 1 === 0) ? speedValue : speedValue.toFixed(1);
+  }
+  updateSpeedLabel();
 
   function speedToPxPerTick(v) {
     // Escala exponencial: 1 = beeem devagar (músicas com introdução longa
@@ -1756,7 +1776,7 @@
 
   function scrollTick() {
     if (!scrolling) return;
-    const px = speedToPxPerTick(parseFloat(speedRange.value) || 4);
+    const px = speedToPxPerTick(speedValue);
     cifraScroll.scrollTop = cifraScroll.scrollTop + px;
     if (cifraScroll.scrollTop + cifraScroll.clientHeight >= cifraScroll.scrollHeight - 1) {
       stopAutoScroll();
@@ -1780,10 +1800,16 @@
   playBtn.addEventListener('click', function() {
     scrolling ? stopAutoScroll() : startAutoScroll();
   });
-  speedRange.addEventListener('input', function() {
-    localStorage.setItem('mcj_speed', speedRange.value);
+  document.getElementById('speed-minus').addEventListener('click', function() {
+    speedValue = Math.max(1, Math.round((speedValue - 0.5) * 10) / 10);
+    updateSpeedLabel();
+    localStorage.setItem('mcj_speed', speedValue);
   });
-  speedRange.addEventListener('click', function(e) { e.stopPropagation(); });
+  document.getElementById('speed-plus').addEventListener('click', function() {
+    speedValue = Math.min(10, Math.round((speedValue + 0.5) * 10) / 10);
+    updateSpeedLabel();
+    localStorage.setItem('mcj_speed', speedValue);
+  });
 
   // ---------- Tela sempre ativa (Wake Lock) ----------
   const wakeBtn = document.getElementById('wake-btn');
