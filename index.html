@@ -447,9 +447,11 @@
     }
     .modal-label input, .modal-label select {
       display: block;
+      box-sizing: border-box;
       width: 100%;
+      height: 46px;
       margin-top: 5px;
-      padding: 10px 12px;
+      padding: 0 12px;
       border: 1px solid rgba(61,64,70,0.25);
       border-radius: 10px;
       font-size: 14px;
@@ -499,8 +501,9 @@
       gap: 10px;
     }
     .back-btn {
-      background: rgba(35,36,39,0.10);
-      border: none;
+      background: rgba(255,255,255,0.7);
+      border: 1px solid rgba(255,255,255,0.9);
+      box-shadow: 0 1px 3px rgba(35,36,39,0.12);
       color: var(--wine-dark);
       width: 36px; height: 36px;
       border-radius: 50%;
@@ -527,8 +530,11 @@
       text-overflow: ellipsis;
     }
     .page-pill {
-      background: rgba(35,36,39,0.10);
+      background: rgba(255,255,255,0.7);
+      border: 1px solid rgba(255,255,255,0.9);
+      box-shadow: 0 1px 3px rgba(35,36,39,0.12);
       color: var(--wine-dark);
+      font-weight: 600;
       font-size: 11.5px;
       padding: 4px 10px;
       border-radius: 20px;
@@ -543,9 +549,11 @@
       flex-wrap: wrap;
     }
     .tool-btn {
-      background: rgba(35,36,39,0.10);
-      border: 1px solid rgba(35,36,39,0.16);
+      background: rgba(255,255,255,0.7);
+      border: 1px solid rgba(255,255,255,0.9);
+      box-shadow: 0 1px 3px rgba(35,36,39,0.12);
       color: var(--wine-dark);
+      font-weight: 600;
       border-radius: 10px;
       padding: 7px 10px;
       font-size: 13px;
@@ -564,7 +572,9 @@
     .font-controls {
       display: flex;
       align-items: center;
-      background: rgba(35,36,39,0.10);
+      background: rgba(255,255,255,0.7);
+      border: 1px solid rgba(255,255,255,0.9);
+      box-shadow: 0 1px 3px rgba(35,36,39,0.12);
       border-radius: 10px;
       overflow: hidden;
     }
@@ -579,7 +589,9 @@
       display: flex;
       align-items: center;
       gap: 6px;
-      background: rgba(35,36,39,0.10);
+      background: rgba(255,255,255,0.7);
+      border: 1px solid rgba(255,255,255,0.9);
+      box-shadow: 0 1px 3px rgba(35,36,39,0.12);
       border-radius: 10px;
       padding: 4px 10px;
       flex: 1;
@@ -1594,6 +1606,7 @@
   let lastPdfFilename = '';
   const pdfResultModal = document.getElementById('missa-pdf-result-modal');
   const pdfShareBtn = document.getElementById('pdf-share-btn');
+  const pdfWhatsappBtn = document.getElementById('pdf-whatsapp-btn');
   const pdfWhatsappNote = document.getElementById('pdf-whatsapp-note');
 
   function canShareFile(blob, filename) {
@@ -1605,7 +1618,13 @@
   }
 
   function showPdfResultModal() {
-    pdfShareBtn.style.display = canShareFile(lastPdfBlob, lastPdfFilename) ? '' : 'none';
+    const canShare = canShareFile(lastPdfBlob, lastPdfFilename);
+    // "Compartilhar" já resolve o envio com o PDF anexado sozinho. O
+    // "Abrir WhatsApp" só manda texto (nenhum site consegue anexar
+    // arquivo por link) — então só faz sentido mostrar ele quando
+    // "Compartilhar" não estiver disponível nesse aparelho/navegador.
+    pdfShareBtn.style.display = canShare ? '' : 'none';
+    pdfWhatsappBtn.style.display = canShare ? 'none' : '';
     pdfWhatsappNote.style.display = 'none';
     pdfResultModal.classList.add('show');
   }
@@ -1622,15 +1641,25 @@
     setTimeout(function() { URL.revokeObjectURL(url); }, 2000);
   });
 
+  function buildMissaShareText() {
+    let msg = 'Seguem as músicas da missa';
+    const bits = [];
+    if (missaLocal) bits.push('em ' + missaLocal);
+    if (missaDate) bits.push('dia ' + formatDateBR(missaDate));
+    if (missaTime) bits.push('às ' + missaTime);
+    if (bits.length) msg += ' ' + bits.join(', ');
+    return msg + ' 🎶';
+  }
+
   pdfShareBtn.addEventListener('click', function() {
     if (!lastPdfBlob) return;
     const file = new File([lastPdfBlob], lastPdfFilename, { type: 'application/pdf' });
-    navigator.share({ files: [file], title: 'Músicas da Missa' }).catch(function() {});
+    navigator.share({ files: [file], title: 'Músicas da Missa', text: buildMissaShareText() }).catch(function() {});
   });
 
   document.getElementById('pdf-whatsapp-btn').addEventListener('click', function() {
     pdfWhatsappNote.style.display = 'block';
-    const text = encodeURIComponent('Segue as músicas da missa 🎶');
+    const text = encodeURIComponent(buildMissaShareText());
     window.open('https://wa.me/?text=' + text, '_blank');
   });
 
