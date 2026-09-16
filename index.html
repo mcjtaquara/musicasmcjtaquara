@@ -765,6 +765,12 @@
             <span id="font-size-label">16</span>
             <button id="font-plus">A+</button>
           </div>
+          <div class="speed-wrap" style="flex:0 0 auto; min-width:0;">
+            <span>Tom</span>
+            <button id="transpose-minus" class="stepper-btn" type="button">−</button>
+            <span id="transpose-label" class="stepper-value">0</span>
+            <button id="transpose-plus" class="stepper-btn" type="button">+</button>
+          </div>
           <button class="tool-btn" id="wake-btn"><svg class="icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg> Tela ativa</button>
         </div>
         <div class="wake-status off" id="wake-status"><span class="dot"></span><span id="wake-status-text">Tela pode bloquear normalmente</span></div>
@@ -1234,6 +1240,62 @@
     return t.length > 0 && t.length < 50 && CHORD_LINE_RE.test(line) && /[A-G]/.test(t);
   }
 
+  // ---------- Transposição de tom ----------
+  // Reescreve os acordes de uma linha subindo/descendo N meios-tons,
+  // preservando o alinhamento com a letra (compensa espaços quando o
+  // acorde muda de tamanho, ex: "C" (1 char) -> "C#" (2 chars)).
+  const CHROMATIC = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  const FLAT_TO_SHARP = { 'Db': 'C#', 'Eb': 'D#', 'Gb': 'F#', 'Ab': 'G#', 'Bb': 'A#', 'Cb': 'B', 'Fb': 'E' };
+  const CHORD_TOKEN_RE = /^([A-G])([#b]?)([^\/\s]*)(\/([A-G])([#b]?)(\S*))?$/;
+
+  function noteIndex(letter, accidental) {
+    let note = letter + (accidental || '');
+    if (FLAT_TO_SHARP[note]) note = FLAT_TO_SHARP[note];
+    return CHROMATIC.indexOf(note);
+  }
+  function transposeNote(letter, accidental, semitones) {
+    const idx = noteIndex(letter, accidental);
+    if (idx === -1) return letter + (accidental || '');
+    const newIdx = ((idx + semitones) % 12 + 12) % 12;
+    return CHROMATIC[newIdx];
+  }
+  function transposeChordToken(token, semitones) {
+    const m = token.match(CHORD_TOKEN_RE);
+    if (!m) return token; // não reconhecido como acorde — deixa como está
+    let result = transposeNote(m[1], m[2], semitones) + (m[3] || '');
+    if (m[4]) {
+      result += '/' + transposeNote(m[5], m[6], semitones) + (m[7] || '');
+    }
+    return result;
+  }
+  function transposeChordLine(line, semitones) {
+    const parts = line.match(/(\s+|\S+)/g) || [];
+    let result = '';
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      if (/^\s+$/.test(part)) { result += part; continue; }
+      const newToken = transposeChordToken(part, semitones);
+      const delta = part.length - newToken.length;
+      result += newToken;
+      if (delta !== 0) {
+        if (i + 1 < parts.length && /^\s+$/.test(parts[i + 1])) {
+          let spaces = parts[i + 1];
+          spaces = delta > 0 ? (spaces + ' '.repeat(delta)) : spaces.slice(0, Math.max(0, spaces.length + delta));
+          parts[i + 1] = spaces;
+        } else if (delta > 0) {
+          result += ' '.repeat(delta);
+        }
+      }
+    }
+    return result;
+  }
+  function transposeCifraText(cifra, semitones) {
+    if (!semitones) return cifra;
+    return cifra.split('\n').map(function(line) {
+      return isChordLine(line) ? transposeChordLine(line, semitones) : line;
+    }).join('\n');
+  }
+
   const measureCanvas = document.createElement('canvas');
   const measureCtx = measureCanvas.getContext('2d');
   function measureLineWidthPx(text, fontSizePx, fontFamily) {
@@ -1263,8 +1325,11 @@
     return w - 32; // padding lateral (16px de cada lado)
   }
 
+  let transposeSemitones = 0;
+
   function renderCifra(song) {
-    const lines = song.cifra.split('\n');
+    const cifraText = transposeCifraText(song.cifra, transposeSemitones);
+    const lines = cifraText.split('\n');
     const family = getComputedStyle(cifraContent).fontFamily;
     const available = getAvailableWidth();
     const isChord = lines.map(isChordLine);
@@ -1309,6 +1374,8 @@
     if (!song) { location.hash = '#/'; return; }
     currentSong = song;
     songReturnTarget = returnTarget || 'list';
+    transposeSemitones = 0;
+    updateTransposeLabel();
     songTitleEl.textContent = song.title;
     songArtistEl.textContent = song.artist || '';
     songPageEl.textContent = 'pág. ' + song.page;
@@ -1752,6 +1819,22 @@
     fontSize = Math.max(11, fontSize - 2); applyFontSize();
   });
   applyFontSize();
+
+  // ---------- Transposição de tom ----------
+  const transposeLabel = document.getElementById('transpose-label');
+  function updateTransposeLabel() {
+    transposeLabel.textContent = transposeSemitones > 0 ? ('+' + transposeSemitones) : String(transposeSemitones);
+  }
+  document.getElementById('transpose-plus').addEventListener('click', function() {
+    transposeSemitones = Math.min(11, transposeSemitones + 1);
+    updateTransposeLabel();
+    refreshCifra();
+  });
+  document.getElementById('transpose-minus').addEventListener('click', function() {
+    transposeSemitones = Math.max(-11, transposeSemitones - 1);
+    updateTransposeLabel();
+    refreshCifra();
+  });
 
 
   // ---------- Rolagem automática ----------
