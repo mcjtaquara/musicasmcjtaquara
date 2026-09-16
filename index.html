@@ -939,6 +939,9 @@
             <div class="a" id="history-subtitle"></div>
           </div>
         </div>
+        <div class="toolbar" id="history-toolbar">
+          <button class="tool-btn" id="history-clear-all-btn"><svg class="icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg> Apagar Tudo</button>
+        </div>
       </div>
       <div class="missa-list-scroll" id="history-content"></div>
     </div>
@@ -1397,8 +1400,8 @@
           (s.artist ? '<div class="artist">' + (isTextQuery ? highlight(s.artist, query) : escapeHtml(s.artist)) + '</div>' : '') +
           snippetHtml +
         '</div>' +
-        favBtnHtml +
         '<div class="page-badge">' + s.page + '</div>' +
+        favBtnHtml +
       '</div>';
     });
     listEl.innerHTML = html;
@@ -1445,9 +1448,17 @@
   const backBtn = document.getElementById('back-btn');
 
   const CHORD_LINE_RE = /^[\sA-G0-9#b/()xX*.,+superidimMmaj°ø\-–|:]+$/;
+  // remove marcações como "[Intro]", "[Refrão]" e "Tom: G" antes de checar
+  // se a linha é de acorde — elas antes faziam a linha inteira ser tratada
+  // como letra (e nunca ser transposta) só por causa dos colchetes.
+  function stripNonChordMarkers_(line) {
+    return line.replace(/\[[^\]]*\]/g, ' ').replace(/Tom:\s*[A-G][#b]?/gi, ' ');
+  }
   function isChordLine(line) {
-    const t = line.trim();
-    return t.length > 0 && t.length < 50 && CHORD_LINE_RE.test(line) && /[A-G]/.test(t);
+    const stripped = stripNonChordMarkers_(line);
+    const t = stripped.trim();
+    return t.length > 0 && t.length < 60 && line.trim().length < 70 &&
+      CHORD_LINE_RE.test(stripped) && /[A-G]/.test(t);
   }
 
   // ---------- Transposição de tom ----------
@@ -1490,7 +1501,9 @@
       if (delta !== 0) {
         if (i + 1 < parts.length && /^\s+$/.test(parts[i + 1])) {
           let spaces = parts[i + 1];
-          spaces = delta > 0 ? (spaces + ' '.repeat(delta)) : spaces.slice(0, Math.max(0, spaces.length + delta));
+          // nunca deixa dois acordes colados sem nenhum espaço — melhor
+          // perder um pouquinho do alinhamento do que ficar ilegível
+          spaces = delta > 0 ? (spaces + ' '.repeat(delta)) : spaces.slice(0, Math.max(1, spaces.length + delta));
           parts[i + 1] = spaces;
         } else if (delta > 0) {
           result += ' '.repeat(delta);
@@ -1773,6 +1786,7 @@
 
   function renderHistoryList() {
     historyDetailIndex = -1;
+    document.getElementById('history-toolbar').style.display = missaHistory.length ? 'flex' : 'none';
     document.getElementById('history-title').textContent = 'Missas Anteriores';
     document.getElementById('history-subtitle').textContent = missaHistory.length +
       (missaHistory.length === 1 ? ' registrada' : ' registradas');
@@ -1786,21 +1800,53 @@
       const dateLabel = entry.date ? formatDateBR(entry.date) : 'Sem data registrada';
       const timeLabel = entry.time ? (' às ' + entry.time) : '';
       const localLabel = entry.local ? (' · ' + entry.local) : '';
-      html += '<div class="history-entry" data-idx="' + idx + '">' +
-        '<div class="date">' + escapeHtml(dateLabel) + escapeHtml(timeLabel) + '</div>' +
-        '<div class="meta">' + entry.selection.length + (entry.selection.length === 1 ? ' música' : ' músicas') + escapeHtml(localLabel) + '</div>' +
+      html += '<div class="missa-row history-entry" data-idx="' + idx + '">' +
+        '<div class="info" style="flex:1; min-width:0;">' +
+          '<div class="title">' + escapeHtml(dateLabel) + escapeHtml(timeLabel) + '</div>' +
+          '<div class="artist">' + entry.selection.length + (entry.selection.length === 1 ? ' música' : ' músicas') + escapeHtml(localLabel) + '</div>' +
+        '</div>' +
+        '<button class="remove-btn" data-del-idx="' + idx + '" aria-label="Excluir"><svg class="icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>' +
       '</div>';
     });
     container.innerHTML = html;
-    Array.prototype.forEach.call(container.querySelectorAll('.history-entry'), function(el) {
+    Array.prototype.forEach.call(container.querySelectorAll('.history-entry .info'), function(el) {
       el.addEventListener('click', function() {
-        renderHistoryDetail(parseInt(el.getAttribute('data-idx'), 10));
+        renderHistoryDetail(parseInt(el.closest('.history-entry').getAttribute('data-idx'), 10));
+      });
+    });
+    Array.prototype.forEach.call(container.querySelectorAll('.history-entry .remove-btn'), function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        const idx = parseInt(btn.getAttribute('data-del-idx'), 10);
+        const entry = missaHistory[idx];
+        if (!entry) return;
+        if (!confirm('Excluir essa missa arquivada? Essa ação não pode ser desfeita.')) return;
+        fetch(API_URL + '?action=deleteHistoryEntry&archivedAt=' + encodeURIComponent(entry.archivedAt))
+          .then(function(res) { return res.json(); })
+          .then(function(data) {
+            missaHistory = data.history || [];
+            renderHistoryList();
+          })
+          .catch(function() { alert('Não consegui conectar. Tente de novo.'); });
       });
     });
   }
 
+  document.getElementById('history-clear-all-btn').addEventListener('click', function() {
+    if (missaHistory.length === 0) return;
+    if (!confirm('Apagar TODO o histórico de missas anteriores (' + missaHistory.length + ')? Essa ação não pode ser desfeita.')) return;
+    fetch(API_URL + '?action=clearHistory')
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        missaHistory = data.history || [];
+        renderHistoryList();
+      })
+      .catch(function() { alert('Não consegui conectar. Tente de novo.'); });
+  });
+
   function renderHistoryDetail(idx) {
     historyDetailIndex = idx;
+    document.getElementById('history-toolbar').style.display = 'none';
     const entry = missaHistory[idx];
     if (!entry) return;
     document.getElementById('history-title').textContent = entry.date ? formatDateBR(entry.date) : 'Missa arquivada';
@@ -1824,8 +1870,8 @@
       if (!song) return;
       let moment = '';
       Object.keys(assignments).forEach(function(k) { if (assignments[k] === id) moment = k; });
-      html += '<div class="history-detail-song" data-id="' + id + '">' +
-        (moment ? '<span class="moment-tag">' + escapeHtml(moment) + '</span>' : '') +
+      html += '<div class="missa-row history-detail-song" data-id="' + id + '">' +
+        (moment ? '<span class="moment-tag">' + escapeHtml(moment) + '</span>' : '<span class="moment-tag unassigned" style="opacity:0.5;">Sem momento</span>') +
         '<div class="info" style="flex:1; min-width:0;">' +
           '<div class="title">' + escapeHtml(song.title) + '</div>' +
           (song.artist ? '<div class="artist">' + escapeHtml(song.artist) + '</div>' : '') +
