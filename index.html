@@ -222,6 +222,12 @@
       min-width: 30px;
       text-align: center;
     }
+    .page-fav-group {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
     .favorite-btn {
       flex-shrink: 0;
       background: none;
@@ -1400,8 +1406,10 @@
           (s.artist ? '<div class="artist">' + (isTextQuery ? highlight(s.artist, query) : escapeHtml(s.artist)) + '</div>' : '') +
           snippetHtml +
         '</div>' +
-        '<div class="page-badge">' + s.page + '</div>' +
-        favBtnHtml +
+        '<div class="page-fav-group">' +
+          '<div class="page-badge">' + s.page + '</div>' +
+          favBtnHtml +
+        '</div>' +
       '</div>';
     });
     listEl.innerHTML = html;
@@ -1457,7 +1465,12 @@
   function isChordLine(line) {
     const stripped = stripNonChordMarkers_(line);
     const t = stripped.trim();
-    return t.length > 0 && t.length < 60 && line.trim().length < 70 &&
+    // O filtro de caracteres (CHORD_LINE_RE) já é rígido o bastante pra não
+    // confundir com letra de música — não precisa de um limite de tamanho
+    // curto também (algumas linhas de acorde com muita coisa passavam de
+    // 60 caracteres e ficavam de fora por engano, ex: refrões com vários
+    // acordes na mesma linha).
+    return t.length > 0 && t.length < 120 && line.trim().length < 140 &&
       CHORD_LINE_RE.test(stripped) && /[A-G]/.test(t);
   }
 
