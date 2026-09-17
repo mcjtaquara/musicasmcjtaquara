@@ -1568,7 +1568,9 @@
     const cifraText = transposeCifraText(song.cifra, transposeSemitones);
     let lines = cifraText.split('\n');
     if (presentationMode) {
-      lines = lines.filter(function(line) { return !isChordLine(line) && line.trim() !== ''; });
+      // remove só as linhas de acorde — mantém as linhas em branco, que são
+      // o que separa estrofe/refrão visualmente
+      lines = lines.filter(function(line) { return !isChordLine(line); });
     }
     const baseSize = presentationMode ? Math.round(fontSize * 1.6) : fontSize;
     const family = getComputedStyle(cifraContent).fontFamily;
