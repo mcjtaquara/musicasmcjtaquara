@@ -563,6 +563,13 @@
       cursor: pointer;
       padding: 4px 2px;
     }
+    .missa-row .remove-btn.locked,
+    .tool-btn.locked {
+      color: var(--muted);
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+    .tool-btn.locked:active { transform: none; }
 
     /* ---------- Modal ---------- */
     .modal-overlay {
@@ -1799,18 +1806,27 @@
   // ---------- Missas Anteriores (histórico) ----------
   let historyDetailIndex = -1;
 
+  const MAX_MISSA_HISTORY = 10;
+
   function renderHistoryList() {
     historyDetailIndex = -1;
+    const isFull = missaHistory.length >= MAX_MISSA_HISTORY;
+    const clearAllBtn = document.getElementById('history-clear-all-btn');
     document.getElementById('history-toolbar').style.display = missaHistory.length ? 'flex' : 'none';
+    clearAllBtn.disabled = !isFull;
+    clearAllBtn.classList.toggle('locked', !isFull);
     document.getElementById('history-title').textContent = 'Missas Anteriores';
-    document.getElementById('history-subtitle').textContent = missaHistory.length +
-      (missaHistory.length === 1 ? ' registrada' : ' registradas');
+    document.getElementById('history-subtitle').textContent = missaHistory.length + '/' + MAX_MISSA_HISTORY +
+      (isFull ? ' — exclusão liberada' : ' registradas');
     const container = document.getElementById('history-content');
     if (missaHistory.length === 0) {
       container.innerHTML = '<div class="empty-state"><svg class="icon" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Nenhuma missa arquivada ainda.<br>Toda vez que você clicar em "Criar Nova Lista" com músicas escolhidas, a lista anterior aparece aqui.</div>';
       return;
     }
     let html = '';
+    if (!isFull) {
+      html += '<div class="admin-hint" style="padding:0 6px 10px;">🔒 A exclusão (individual ou geral) é liberada quando o histórico completar ' + MAX_MISSA_HISTORY + ' missas — faltam ' + (MAX_MISSA_HISTORY - missaHistory.length) + '. Até lá, a mais antiga sai sozinha quando uma nova entra.</div>';
+    }
     missaHistory.forEach(function(entry, idx) {
       const dateLabel = entry.date ? formatDateBR(entry.date) : 'Sem data registrada';
       const timeLabel = entry.time ? (' às ' + entry.time) : '';
@@ -1820,7 +1836,11 @@
           '<div class="title">' + escapeHtml(dateLabel) + escapeHtml(timeLabel) + '</div>' +
           '<div class="artist">' + entry.selection.length + (entry.selection.length === 1 ? ' música' : ' músicas') + escapeHtml(localLabel) + '</div>' +
         '</div>' +
-        '<button class="remove-btn" data-del-idx="' + idx + '" aria-label="Excluir"><svg class="icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>' +
+        '<button class="remove-btn' + (isFull ? '' : ' locked') + '" data-del-idx="' + idx + '" ' + (isFull ? '' : 'disabled') + ' aria-label="Excluir">' +
+          (isFull ?
+            '<svg class="icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>' :
+            '<svg class="icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>') +
+        '</button>' +
       '</div>';
     });
     container.innerHTML = html;
@@ -1832,6 +1852,7 @@
     Array.prototype.forEach.call(container.querySelectorAll('.history-entry .remove-btn'), function(btn) {
       btn.addEventListener('click', function(e) {
         e.stopPropagation();
+        if (btn.disabled) return;
         const idx = parseInt(btn.getAttribute('data-del-idx'), 10);
         const entry = missaHistory[idx];
         if (!entry) return;
@@ -1848,6 +1869,7 @@
   }
 
   document.getElementById('history-clear-all-btn').addEventListener('click', function() {
+    if (missaHistory.length < MAX_MISSA_HISTORY) return;
     if (missaHistory.length === 0) return;
     if (!confirm('Apagar TODO o histórico de missas anteriores (' + missaHistory.length + ')? Essa ação não pode ser desfeita.')) return;
     fetch(API_URL + '?action=clearHistory')
