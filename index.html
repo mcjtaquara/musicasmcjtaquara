@@ -1065,13 +1065,20 @@
   let SONGS = [];
   let SONGS_SORTED = [];
 
-  // ---------- Favoritas (guardado só neste aparelho) ----------
+  // ---------- Favoritas (compartilhado entre todos, igual a lista da missa) ----------
   let favoriteIds = new Set();
-  try { favoriteIds = new Set(JSON.parse(localStorage.getItem('mcj_favorites') || '[]')); } catch (e) {}
   function isFavorite(id) { return favoriteIds.has(id); }
   function toggleFavorite(id) {
+    // otimista: já marca/desmarca na tela, e confirma com o servidor depois
     if (favoriteIds.has(id)) favoriteIds.delete(id); else favoriteIds.add(id);
-    localStorage.setItem('mcj_favorites', JSON.stringify(Array.from(favoriteIds)));
+    fetch(API_URL + '?action=toggleFavorite&id=' + encodeURIComponent(id))
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        favoriteIds = new Set(data.favorites || []);
+        initSongs(SONGS);
+        renderList();
+      })
+      .catch(function() {});
   }
 
   function normalize(str) {
@@ -1122,8 +1129,8 @@
         return res.json();
       })
       .then(function(data) {
-        initSongs(data.songs || data);
         applyServerState(data);
+        initSongs(data.songs || data);
         showApp();
         updateMissaSelectButton();
         renderList();
@@ -1195,6 +1202,7 @@
     missaTime = data.missaTime || '';
     missaLocal = data.missaLocal || '';
     missaHistory = data.history || [];
+    favoriteIds = new Set(data.favorites || []);
   }
 
   let syncDebounceTimer = null;
