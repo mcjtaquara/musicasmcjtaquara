@@ -228,6 +228,78 @@
       align-items: center;
       gap: 4px;
     }
+    .moment-tag-btn {
+      flex-shrink: 0;
+      background: none;
+      border: none;
+      color: rgba(131,128,124,0.4);
+      padding: 4px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      transition: transform 0.1s ease;
+    }
+    .moment-tag-btn:active { transform: scale(0.85); }
+    .moment-tag-btn.has-tags { color: var(--wine-dark); }
+    .song-moment-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 4px;
+    }
+    .song-moment-pill {
+      font-size: 10.5px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 20px;
+      white-space: nowrap;
+    }
+    .moment-filter-row {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding: 2px 1px 10px;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .moment-filter-row::-webkit-scrollbar { display: none; }
+    .moment-filter-chip {
+      flex-shrink: 0;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 6px 12px;
+      border-radius: 20px;
+      white-space: nowrap;
+      cursor: pointer;
+      border: 1.5px solid transparent;
+      background: var(--card);
+      color: var(--muted);
+      transition: transform 0.1s ease;
+    }
+    .moment-filter-chip:active { transform: scale(0.94); }
+    .moment-filter-chip.active { border-color: currentColor; }
+
+    /* ---------- Modal: escolher momento(s) de uma música ---------- */
+    .moment-picker-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 10px 0 4px;
+    }
+    .moment-picker-chip {
+      font-size: 13px;
+      font-weight: 700;
+      padding: 8px 14px;
+      border-radius: 20px;
+      cursor: pointer;
+      border: 1.5px solid transparent;
+      opacity: 0.55;
+    }
+    .moment-picker-chip.selected {
+      opacity: 1;
+      border-color: currentColor;
+    }
+
     .favorite-btn {
       flex-shrink: 0;
       background: none;
@@ -861,6 +933,7 @@
           <input id="search-input" type="text" placeholder="Buscar por título, artista, trecho da letra ou nº da página...">
           <button class="clear-btn" id="clear-search"><svg class="icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
+        <div class="moment-filter-row" id="moment-filter-row"></div>
       </div>
       <div class="result-meta" id="result-meta"></div>
       <div id="song-list"></div>
@@ -908,6 +981,7 @@
           </div>
           <button class="tool-btn" id="wake-btn"><svg class="icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg> Tela ativa</button>
           <button class="tool-btn" id="presentation-btn"><svg class="icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> Só Letra</button>
+          <button class="tool-btn" id="song-moment-btn"><svg class="icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg> Momento</button>
         </div>
         <div class="wake-status off" id="wake-status"><span class="dot"></span><span id="wake-status-text">Tela pode bloquear normalmente</span></div>
       </div>
@@ -977,6 +1051,18 @@
           </svg>
           Abrir no aplicativo do Spotify
         </a>
+      </div>
+    </div>
+
+    <!-- ===================== MODAL: MOMENTO(S) DA MÚSICA ===================== -->
+    <div id="moment-picker-modal" class="modal-overlay">
+      <div class="modal-card">
+        <h3>Momento litúrgico</h3>
+        <p class="modal-hint">Marque um ou mais momentos em que essa música costuma ser usada.</p>
+        <div class="moment-picker-list" id="moment-picker-list"></div>
+        <div class="modal-actions">
+          <button id="moment-picker-close" class="sel-btn sel-btn-primary">Pronto</button>
+        </div>
       </div>
     </div>
 
@@ -1133,6 +1219,7 @@
         initSongs(data.songs || data);
         showApp();
         updateMissaSelectButton();
+        renderMomentFilterRow();
         renderList();
         router();
       })
@@ -1187,6 +1274,90 @@
     'Ofertório', 'Santo', 'Cordeiro', 'Comunhão', 'Pós-Comunhão', 'Saída', 'Extra'];
   const MAX_MISSA_SONGS = 11;
 
+  // ---------- Classificação de momento no catálogo (permanente, compartilhada) ----------
+  // Cor própria por momento — só pra essas etiquetas/filtros, não mexe no
+  // resto da paleta do app.
+  const MOMENT_COLORS = {
+    'Entrada':         { dark: '#773535', light: '#eed2d2' },
+    'Ato Penitencial': { dark: '#775935', light: '#eee1d2' },
+    'Glória':          { dark: '#717735', light: '#ebeed2' },
+    'Aclamação':       { dark: '#4d7735', light: '#dceed2' },
+    'Ofertório':       { dark: '#357741', light: '#d2eed7' },
+    'Santo':           { dark: '#357765', light: '#d2eee6' },
+    'Cordeiro':        { dark: '#356577', light: '#d2e6ee' },
+    'Comunhão':        { dark: '#354177', light: '#d2d7ee' },
+    'Pós-Comunhão':    { dark: '#4d3577', light: '#dcd2ee' },
+    'Saída':           { dark: '#713577', light: '#ebd2ee' },
+    'Extra':           { dark: '#773559', light: '#eed2e1' }
+  };
+  let momentTags = {}; // { songId: ['Entrada', 'Saída', ...] }
+  let momentFilters = new Set(); // momentos selecionados no filtro da lista principal
+  function getSongMoments(id) { return momentTags[id] || []; }
+
+  function toggleMomentTag(id, moment) {
+    fetch(API_URL + '?action=toggleMomentTag&id=' + encodeURIComponent(id) + '&moment=' + encodeURIComponent(moment))
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        momentTags = data.momentTags || {};
+        renderList();
+        if (momentPickerSongId != null) renderMomentPicker(momentPickerSongId);
+      })
+      .catch(function() { alert('Não consegui conectar. Tente de novo.'); });
+  }
+
+  // ---------- Modal: marcar momento(s) de uma música ----------
+  let momentPickerSongId = null;
+  const momentPickerModal = document.getElementById('moment-picker-modal');
+  function renderMomentPicker(id) {
+    const current = getSongMoments(id);
+    const list = document.getElementById('moment-picker-list');
+    list.innerHTML = LITURGICAL_MOMENTS.map(function(m) {
+      const c = MOMENT_COLORS[m];
+      const sel = current.indexOf(m) !== -1;
+      return '<button type="button" class="moment-picker-chip' + (sel ? ' selected' : '') +
+        '" data-moment="' + escapeHtml(m) + '" style="background:' + c.light + '; color:' + c.dark + ';">' + escapeHtml(m) + '</button>';
+    }).join('');
+    Array.prototype.forEach.call(list.querySelectorAll('.moment-picker-chip'), function(chip) {
+      chip.addEventListener('click', function() {
+        toggleMomentTag(id, chip.getAttribute('data-moment'));
+      });
+    });
+  }
+  function openMomentPicker(id) {
+    momentPickerSongId = id;
+    renderMomentPicker(id);
+    momentPickerModal.classList.add('show');
+  }
+  document.getElementById('moment-picker-close').addEventListener('click', function() {
+    momentPickerModal.classList.remove('show');
+    momentPickerSongId = null;
+  });
+  document.getElementById('song-moment-btn').addEventListener('click', function() {
+    if (currentSong) openMomentPicker(currentSong.id);
+  });
+
+  // ---------- Filtro por momento na tela inicial ----------
+  function renderMomentFilterRow() {
+    const row = document.getElementById('moment-filter-row');
+    row.innerHTML = LITURGICAL_MOMENTS.map(function(m) {
+      const c = MOMENT_COLORS[m];
+      const active = momentFilters.has(m);
+      const style = active
+        ? 'background:' + c.light + '; color:' + c.dark + ';'
+        : '';
+      return '<button type="button" class="moment-filter-chip' + (active ? ' active' : '') +
+        '" data-moment="' + escapeHtml(m) + '" style="' + style + '">' + escapeHtml(m) + '</button>';
+    }).join('');
+    Array.prototype.forEach.call(row.querySelectorAll('.moment-filter-chip'), function(chip) {
+      chip.addEventListener('click', function() {
+        const m = chip.getAttribute('data-moment');
+        if (momentFilters.has(m)) momentFilters.delete(m); else momentFilters.add(m);
+        renderMomentFilterRow();
+        renderList();
+      });
+    });
+  }
+
   let selectionMode = false;
   let selectedIds = [];
   let momentAssignments = {};
@@ -1203,6 +1374,7 @@
     missaLocal = data.missaLocal || '';
     missaHistory = data.history || [];
     favoriteIds = new Set(data.favorites || []);
+    momentTags = data.momentTags || {};
   }
 
   let syncDebounceTimer = null;
@@ -1370,12 +1542,21 @@
     } else {
       results = SONGS_SORTED.filter(function(s) { return s._searchFull.indexOf(query) !== -1; });
     }
+    if (momentFilters.size > 0) {
+      results = results.filter(function(s) {
+        const moms = getSongMoments(s.id);
+        return moms.some(function(m) { return momentFilters.has(m); });
+      });
+    }
 
     metaEl.textContent = results.length + (results.length === 1 ? ' música encontrada' : ' músicas encontradas') +
       (query && !/^\d+$/.test(rawQuery) ? '' : '');
 
     if (results.length === 0) {
-      listEl.innerHTML = '<div class="empty-state"><svg class="icon" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Nenhuma música encontrada para "' + escapeHtml(rawQuery) + '"</div>';
+      const emptyMsg = rawQuery
+        ? 'Nenhuma música encontrada para "' + escapeHtml(rawQuery) + '"'
+        : 'Nenhuma música marcada com esse momento ainda.';
+      listEl.innerHTML = '<div class="empty-state"><svg class="icon" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>' + emptyMsg + '</div>';
       return;
     }
 
@@ -1414,15 +1595,27 @@
         '<button class="favorite-btn' + (isFavorite(s.id) ? ' is-fav' : '') + '" data-fav-id="' + s.id + '" aria-label="Favoritar">' +
           '<svg class="icon" viewBox="0 0 24 24" width="18" height="18" fill="' + (isFavorite(s.id) ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg>' +
         '</button>';
+      const songMoments = getSongMoments(s.id);
+      const momentBtnHtml = selectionMode ? '' :
+        '<button class="moment-tag-btn' + (songMoments.length ? ' has-tags' : '') + '" data-moment-id="' + s.id + '" aria-label="Marcar momento">' +
+          '<svg class="icon" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>' +
+        '</button>';
+      const pillsHtml = songMoments.length ?
+        '<div class="song-moment-pills">' + songMoments.map(function(m) {
+          const c = MOMENT_COLORS[m] || { dark: 'var(--wine-dark)', light: 'var(--gold-light)' };
+          return '<span class="song-moment-pill" style="background:' + c.light + '; color:' + c.dark + ';">' + escapeHtml(m) + '</span>';
+        }).join('') + '</div>' : '';
       html += '<div class="' + itemClass + '" data-id="' + s.id + '">' +
         checkHtml +
         '<div class="info">' +
           '<div class="title">' + (isTextQuery ? highlight(s.title, query) : escapeHtml(s.title)) + '</div>' +
           (s.artist ? '<div class="artist">' + (isTextQuery ? highlight(s.artist, query) : escapeHtml(s.artist)) + '</div>' : '') +
           snippetHtml +
+          pillsHtml +
         '</div>' +
         '<div class="page-fav-group">' +
           '<div class="page-badge">' + s.page + '</div>' +
+          momentBtnHtml +
           favBtnHtml +
         '</div>' +
       '</div>';
@@ -1436,6 +1629,14 @@
         toggleFavorite(id);
         initSongs(SONGS); // reordena (favoritas primeiro) mantendo tudo mais igual
         renderList();
+      });
+    });
+
+    Array.prototype.forEach.call(listEl.querySelectorAll('.moment-tag-btn'), function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        const id = parseInt(btn.getAttribute('data-moment-id'), 10);
+        openMomentPicker(id);
       });
     });
 
