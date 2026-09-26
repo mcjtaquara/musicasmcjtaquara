@@ -289,13 +289,28 @@
       padding: 12px 14px;
       margin-top: 8px;
     }
+    .moment-filter-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
     .moment-filter-panel-label {
       font-size: 11.5px;
       font-weight: 700;
       color: var(--muted);
       text-transform: uppercase;
       letter-spacing: 0.4px;
-      margin-bottom: 8px;
+    }
+    .moment-filter-clear-btn {
+      background: none;
+      border: none;
+      font-size: 12px;
+      font-weight: 700;
+      color: #9c3b2f;
+      text-decoration: underline;
+      cursor: pointer;
+      padding: 2px;
     }
     .moment-filter-row {
       display: flex;
@@ -332,7 +347,9 @@
       border-radius: 20px;
       cursor: pointer;
       border: 1.5px solid transparent;
+      transition: transform 0.08s ease;
     }
+    .moment-picker-chip:active { transform: scale(0.9); }
     .moment-picker-chip.selected {
       border-color: currentColor;
       box-shadow: 0 0 0 1.5px currentColor;
@@ -976,7 +993,10 @@
           Filtro
         </button>
         <div class="moment-filter-panel" id="moment-filter-panel" style="display:none;">
-          <div class="moment-filter-panel-label">Filtrar por momento</div>
+          <div class="moment-filter-panel-header">
+            <div class="moment-filter-panel-label">Filtrar por momento</div>
+            <button type="button" id="moment-filter-clear-btn" class="moment-filter-clear-btn">Limpar filtro</button>
+          </div>
           <div class="moment-filter-row" id="moment-filter-row"></div>
         </div>
       </div>
@@ -1200,8 +1220,11 @@
   let favoriteIds = new Set();
   function isFavorite(id) { return favoriteIds.has(id); }
   function toggleFavorite(id) {
-    // otimista: já marca/desmarca na tela, e confirma com o servidor depois
+    // otimista: já marca/desmarca e redesenha na hora — confirma com o
+    // servidor depois, em segundo plano, sem travar o toque
     if (favoriteIds.has(id)) favoriteIds.delete(id); else favoriteIds.add(id);
+    initSongs(SONGS);
+    renderList();
     fetch(API_URL + '?action=toggleFavorite&id=' + encodeURIComponent(id))
       .then(function(res) { return res.json(); })
       .then(function(data) {
@@ -1320,6 +1343,13 @@
   const MAX_MISSA_SONGS = 11;
 
   // ---------- Classificação de momento no catálogo (permanente, compartilhada) ----------
+  // Lista à parte da de cima: essa serve pra classificar/filtrar músicas no
+  // catálogo geral, e inclui categorias (Folclore, Canto Mensagem) que não
+  // fazem sentido como "momento" dentro de uma missa específica — por isso
+  // não entram na LITURGICAL_MOMENTS usada pra montar a ordem da missa.
+  const CATALOG_MOMENTS = LITURGICAL_MOMENTS.concat(['Folclore', 'Canto Mensagem']);
+
+  // ---------- Classificação de momento no catálogo (permanente, compartilhada) ----------
   // Cor própria por momento — só pra essas etiquetas/filtros, não mexe no
   // resto da paleta do app.
   const MOMENT_COLORS = {
@@ -1333,21 +1363,31 @@
     'Comunhão':        { dark: '#354177', light: '#d2d7ee' },
     'Pós-Comunhão':    { dark: '#4d3577', light: '#dcd2ee' },
     'Saída':           { dark: '#713577', light: '#ebd2ee' },
-    'Extra':           { dark: '#773559', light: '#eed2e1' }
+    'Extra':           { dark: '#773559', light: '#eed2e1' },
+    'Folclore':        { dark: '#774735', light: '#eedad2' },
+    'Canto Mensagem':  { dark: '#357777', light: '#d2eeee' }
   };
   let momentTags = {}; // { songId: ['Entrada', 'Saída', ...] }
   let momentFilters = new Set(); // momentos selecionados no filtro da lista principal
   function getSongMoments(id) { return momentTags[id] || []; }
 
   function toggleMomentTag(id, moment) {
+    // otimista: atualiza a etiqueta na hora, sem esperar o servidor —
+    // evita aquela sensação de "travado" ao tocar rápido em vários momentos
+    const list = momentTags[id] ? momentTags[id].slice() : [];
+    const idx = list.indexOf(moment);
+    if (idx !== -1) list.splice(idx, 1); else list.push(moment);
+    if (list.length > 0) momentTags[id] = list; else delete momentTags[id];
+    renderList();
+    if (momentPickerSongId != null) renderMomentPicker(momentPickerSongId);
     fetch(API_URL + '?action=toggleMomentTag&id=' + encodeURIComponent(id) + '&moment=' + encodeURIComponent(moment))
       .then(function(res) { return res.json(); })
       .then(function(data) {
-        momentTags = data.momentTags || {};
+        momentTags = data.momentTags || {}; // concilia com o servidor, em silêncio
         renderList();
         if (momentPickerSongId != null) renderMomentPicker(momentPickerSongId);
       })
-      .catch(function() { alert('Não consegui conectar. Tente de novo.'); });
+      .catch(function() {});
   }
 
   // ---------- Modal: marcar momento(s) de uma música ----------
@@ -1356,7 +1396,7 @@
   function renderMomentPicker(id) {
     const current = getSongMoments(id);
     const list = document.getElementById('moment-picker-list');
-    list.innerHTML = LITURGICAL_MOMENTS.map(function(m) {
+    list.innerHTML = CATALOG_MOMENTS.map(function(m) {
       const c = MOMENT_COLORS[m];
       const sel = current.indexOf(m) !== -1;
       return '<button type="button" class="moment-picker-chip' + (sel ? ' selected' : '') +
@@ -1392,7 +1432,7 @@
   function renderMomentFilterRow() {
     updateMomentFilterToggle();
     const row = document.getElementById('moment-filter-row');
-    row.innerHTML = LITURGICAL_MOMENTS.map(function(m) {
+    row.innerHTML = CATALOG_MOMENTS.map(function(m) {
       const c = MOMENT_COLORS[m];
       const active = momentFilters.has(m);
       return '<button type="button" class="moment-filter-chip' + (active ? ' active' : '') +
@@ -1410,6 +1450,12 @@
   document.getElementById('moment-filter-toggle').addEventListener('click', function() {
     const panel = document.getElementById('moment-filter-panel');
     panel.style.display = (panel.style.display === 'none') ? 'block' : 'none';
+  });
+  document.getElementById('moment-filter-clear-btn').addEventListener('click', function() {
+    momentFilters.clear();
+    renderMomentFilterRow();
+    renderList();
+    document.getElementById('moment-filter-panel').style.display = 'none';
   });
 
   let selectionMode = false;
