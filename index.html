@@ -254,15 +254,41 @@
       border-radius: 20px;
       white-space: nowrap;
     }
+    .moment-filter-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: none;
+      border: none;
+      padding: 4px 2px;
+      margin-top: 14px;
+      font-size: 12.5px;
+      font-weight: 700;
+      color: var(--wine-dark);
+      text-decoration: underline;
+      cursor: pointer;
+    }
+    .moment-filter-toggle.active { color: var(--gold-dark); }
+    .moment-filter-panel {
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 12px 14px;
+      margin-top: 8px;
+    }
+    .moment-filter-panel-label {
+      font-size: 11.5px;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      margin-bottom: 8px;
+    }
     .moment-filter-row {
       display: flex;
-      gap: 6px;
-      overflow-x: auto;
-      padding: 2px 1px 10px;
-      -webkit-overflow-scrolling: touch;
-      scrollbar-width: none;
+      flex-wrap: wrap;
+      gap: 8px;
     }
-    .moment-filter-row::-webkit-scrollbar { display: none; }
     .moment-filter-chip {
       flex-shrink: 0;
       font-size: 12px;
@@ -272,7 +298,7 @@
       white-space: nowrap;
       cursor: pointer;
       border: 1.5px solid transparent;
-      background: var(--card);
+      background: var(--cream);
       color: var(--muted);
       transition: transform 0.1s ease;
     }
@@ -933,7 +959,14 @@
           <input id="search-input" type="text" placeholder="Buscar por título, artista, trecho da letra ou nº da página...">
           <button class="clear-btn" id="clear-search"><svg class="icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
-        <div class="moment-filter-row" id="moment-filter-row"></div>
+        <button type="button" id="moment-filter-toggle" class="moment-filter-toggle">
+          <svg class="icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+          Filtro
+        </button>
+        <div class="moment-filter-panel" id="moment-filter-panel" style="display:none;">
+          <div class="moment-filter-panel-label">Filtrar por momento</div>
+          <div class="moment-filter-row" id="moment-filter-row"></div>
+        </div>
       </div>
       <div class="result-meta" id="result-meta"></div>
       <div id="song-list"></div>
@@ -1337,7 +1370,15 @@
   });
 
   // ---------- Filtro por momento na tela inicial ----------
+  function updateMomentFilterToggle() {
+    const btn = document.getElementById('moment-filter-toggle');
+    const n = momentFilters.size;
+    btn.classList.toggle('active', n > 0);
+    btn.innerHTML = btn.querySelector('svg').outerHTML + ' ' +
+      (n > 0 ? ('Filtro ativo (' + n + ')') : 'Filtro');
+  }
   function renderMomentFilterRow() {
+    updateMomentFilterToggle();
     const row = document.getElementById('moment-filter-row');
     row.innerHTML = LITURGICAL_MOMENTS.map(function(m) {
       const c = MOMENT_COLORS[m];
@@ -1357,6 +1398,10 @@
       });
     });
   }
+  document.getElementById('moment-filter-toggle').addEventListener('click', function() {
+    const panel = document.getElementById('moment-filter-panel');
+    panel.style.display = (panel.style.display === 'none') ? 'block' : 'none';
+  });
 
   let selectionMode = false;
   let selectedIds = [];
