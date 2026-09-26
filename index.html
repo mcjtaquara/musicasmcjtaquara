@@ -253,7 +253,20 @@
       padding: 2px 8px;
       border-radius: 20px;
       white-space: nowrap;
+      cursor: pointer;
     }
+    .song-moment-add-btn {
+      font-size: 10.5px;
+      font-weight: 700;
+      padding: 2px 9px;
+      border-radius: 20px;
+      white-space: nowrap;
+      cursor: pointer;
+      background: none;
+      border: 1.3px dashed rgba(131,128,124,0.5);
+      color: var(--muted);
+    }
+    .song-moment-add-btn:active { transform: scale(0.92); }
     .moment-filter-toggle {
       display: inline-flex;
       align-items: center;
@@ -303,7 +316,7 @@
       transition: transform 0.1s ease;
     }
     .moment-filter-chip:active { transform: scale(0.94); }
-    .moment-filter-chip.active { border-color: currentColor; }
+    .moment-filter-chip.active { border-color: currentColor; box-shadow: 0 0 0 1.5px currentColor; }
 
     /* ---------- Modal: escolher momento(s) de uma música ---------- */
     .moment-picker-list {
@@ -319,11 +332,10 @@
       border-radius: 20px;
       cursor: pointer;
       border: 1.5px solid transparent;
-      opacity: 0.55;
     }
     .moment-picker-chip.selected {
-      opacity: 1;
       border-color: currentColor;
+      box-shadow: 0 0 0 1.5px currentColor;
     }
 
     .favorite-btn {
@@ -1383,11 +1395,8 @@
     row.innerHTML = LITURGICAL_MOMENTS.map(function(m) {
       const c = MOMENT_COLORS[m];
       const active = momentFilters.has(m);
-      const style = active
-        ? 'background:' + c.light + '; color:' + c.dark + ';'
-        : '';
       return '<button type="button" class="moment-filter-chip' + (active ? ' active' : '') +
-        '" data-moment="' + escapeHtml(m) + '" style="' + style + '">' + escapeHtml(m) + '</button>';
+        '" data-moment="' + escapeHtml(m) + '" style="background:' + c.light + '; color:' + c.dark + ';">' + escapeHtml(m) + '</button>';
     }).join('');
     Array.prototype.forEach.call(row.querySelectorAll('.moment-filter-chip'), function(chip) {
       chip.addEventListener('click', function() {
@@ -1645,11 +1654,14 @@
         '<button class="moment-tag-btn' + (songMoments.length ? ' has-tags' : '') + '" data-moment-id="' + s.id + '" aria-label="Marcar momento">' +
           '<svg class="icon" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>' +
         '</button>';
-      const pillsHtml = songMoments.length ?
-        '<div class="song-moment-pills">' + songMoments.map(function(m) {
-          const c = MOMENT_COLORS[m] || { dark: 'var(--wine-dark)', light: 'var(--gold-light)' };
-          return '<span class="song-moment-pill" style="background:' + c.light + '; color:' + c.dark + ';">' + escapeHtml(m) + '</span>';
-        }).join('') + '</div>' : '';
+      const pillsHtml = selectionMode ? '' :
+        '<div class="song-moment-pills">' + (songMoments.length ?
+          songMoments.map(function(m) {
+            const c = MOMENT_COLORS[m] || { dark: 'var(--wine-dark)', light: 'var(--gold-light)' };
+            return '<span class="song-moment-pill" data-moment-id="' + s.id + '" style="background:' + c.light + '; color:' + c.dark + ';">' + escapeHtml(m) + '</span>';
+          }).join('')
+          : '<button type="button" class="song-moment-add-btn" data-moment-id="' + s.id + '">+ Momento</button>'
+        ) + '</div>';
       html += '<div class="' + itemClass + '" data-id="' + s.id + '">' +
         checkHtml +
         '<div class="info">' +
@@ -1666,6 +1678,13 @@
       '</div>';
     });
     listEl.innerHTML = html;
+
+    Array.prototype.forEach.call(listEl.querySelectorAll('.song-moment-pill, .song-moment-add-btn'), function(el) {
+      el.addEventListener('click', function(e) {
+        e.stopPropagation();
+        openMomentPicker(parseInt(el.getAttribute('data-moment-id'), 10));
+      });
+    });
 
     Array.prototype.forEach.call(listEl.querySelectorAll('.favorite-btn'), function(btn) {
       btn.addEventListener('click', function(e) {
